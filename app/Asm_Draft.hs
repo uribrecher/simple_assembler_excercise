@@ -119,8 +119,9 @@ ppReg (Reg i) = "%r" <> show i
 
 toAsm :: Expr -> Asm
 toAsm expr = loadVars ++ useVars
-  where (useVars, _) = toAsm' expr (AsmState M.empty 0)
-        loadVars = [] -- todo: convert state to load instructions
+  where (useVars, AsmState e _) = toAsm' expr (AsmState M.empty 0)
+        loadFold k a asm = AsmLoad (Reg a) k : asm
+        loadVars = M.foldrWithKey loadFold [] e
         
 type Env = M.Map String Int
 data AsmState = AsmState Env Int
