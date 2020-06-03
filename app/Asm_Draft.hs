@@ -118,8 +118,8 @@ ppReg (Reg i) = "%r" <> show i
 
 
 toAsm :: Expr -> Asm
-toAsm expr = loadVars ++ useVars
-  where (useVars, AsmState e _) = toAsm' expr (AsmState M.empty 0)
+toAsm expr = loadVars ++ useVars ++ [AsmRet imm]
+  where (useVars, imm, AsmState e _) = toAsm' expr (AsmState M.empty 0)
         loadFold k a asm = AsmLoad (Reg a) k : asm
         loadVars = M.foldrWithKey loadFold [] e
         
@@ -132,28 +132,24 @@ lookupOrUpdate key s@(AsmState e reg) = case val of
     Just x -> (x, s)
   where val = M.lookup key e
 
-toAsm' :: Expr -> AsmState -> (Asm, AsmState)
-toAsm' (ELit x) s = ([AsmRet (ImmLit x)], s)
+toAsm' :: Expr -> AsmState -> (Asm, Imm, AsmState)
+toAsm' (ELit x) s = ([],ImmLit x, s)
 toAsm' (EVar name) s =
   let (reg, s') = lookupOrUpdate name s
-  in ([ AsmRet (ImmReg (Reg reg))], s')
+  in ([], ImmReg (Reg reg), s')
 toAsm' (EUnaryOp op expr) s =
-  let (asm, s') = toAsm' expr s
+  let (asm, imm, s') = toAsm' expr s
       AsmState e reg = s'
-      AsmRet imm = last asm
-      asm' = init asm ++ [AsmUnaryOp op (Reg reg) imm, AsmRet (ImmReg (Reg reg))]
+      asm' = asm ++ [AsmUnaryOp op (Reg reg) imm]
   in
-    (asm', AsmState e (succ reg))
+    (asm', ImmReg (Reg reg), AsmState e (succ reg))
 toAsm' (EBinOp op ex1 ex2) s =
-  let (asm1, s1) = toAsm' ex1 s
-      (asm2, s2) = toAsm' ex2 s1
-      AsmRet imm1 = last asm1
-      AsmRet imm2 = last asm2
+  let (asm1, imm1, s1) = toAsm' ex1 s
+      (asm2, imm2, s2) = toAsm' ex2 s1
       AsmState e reg = s2
-      asm = init asm1 ++ init asm2 ++ [AsmBinOp op (Reg reg) imm1 imm2
-                                      ,AsmRet (ImmReg (Reg reg))]
+      asm = asm1 ++ asm2 ++ [AsmBinOp op (Reg reg) imm1 imm2]
   in
-    (asm, AsmState e (succ reg))
+    (asm, ImmReg (Reg reg), AsmState e (succ reg))
 
 
 -----------------------
