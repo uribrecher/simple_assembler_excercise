@@ -6,7 +6,11 @@ import Asm_Draft
 main :: IO ()
 main = do
   putStrLn "============"
-  ppAsm . toAsm $ exp1
+  let asm1 = toAsm exp1
+      asm2 = toAsm exp2
+  ppAsm asm1
+  print $ livenessAnalysis asm1
   putStrLn "============"
-  ppAsm . toAsm $ exp2
+  ppAsm asm2
+  print $ livenessAnalysis asm2
 

@@ -11,6 +11,7 @@ module Asm_Draft
 
 import Data.Char (toUpper)
 import qualified Data.Map as M
+import Control.Lens.Indexed as Ind
 
 -----------------
 -- Definitions --
@@ -29,14 +30,14 @@ exp1 = EBinOp Mul
 
 exp2 :: Expr
 exp2 = EBinOp Div
-        (ELit 2)
+        (EUnaryOp Neg (ELit 2))
         (EBinOp Add
           (EBinOp Add
             (EBinOp Sub
               (EVar "a")
               (EVar "b")
             )
-            (EVar "c") 
+            (EVar "c")
           )
           (EBinOp Sub
             (EBinOp Mul (ELit 2) (EVar "b"))
@@ -122,7 +123,7 @@ toAsm expr = loadVars ++ useVars ++ [AsmRet imm]
   where (useVars, imm, AsmState e _) = toAsm' expr (AsmState M.empty 0)
         loadFold k a asm = AsmLoad (Reg a) k : asm
         loadVars = M.foldrWithKey loadFold [] e
-        
+
 type Env = M.Map String Int
 data AsmState = AsmState Env Int
 
@@ -132,14 +133,16 @@ lookupOrUpdate key s@(AsmState e reg) = case val of
     Just x -> (x, s)
   where val = M.lookup key e
 
+
+-- TODO: 1. avoid ++ if possible
+--       2. see if monads help here
 toAsm' :: Expr -> AsmState -> (Asm, Imm, AsmState)
 toAsm' (ELit x) s = ([],ImmLit x, s)
 toAsm' (EVar name) s =
   let (reg, s') = lookupOrUpdate name s
   in ([], ImmReg (Reg reg), s')
 toAsm' (EUnaryOp op expr) s =
-  let (asm, imm, s') = toAsm' expr s
-      AsmState e reg = s'
+  let (asm, imm, AsmState e reg) = toAsm' expr s
       asm' = asm ++ [AsmUnaryOp op (Reg reg) imm]
   in
     (asm', ImmReg (Reg reg), AsmState e (succ reg))
@@ -162,5 +165,17 @@ toAsm' (EBinOp op ex1 ex2) s =
 type Line = Int
 
 livenessAnalysis :: Asm -> M.Map Reg Line
-livenessAnalysis = undefined
+livenessAnalysis = Ind.ifoldr livenessFold M.empty
 
+livenessFold :: Int -> Instruction -> M.Map Reg Line -> M.Map Reg Line
+livenessFold i inst = flip M.union (M.fromList $ zip (extractRegs inst) (repeat i))
+
+extractRegs :: Instruction -> [Reg]
+extractRegs (AsmLoad reg _) = [reg]
+extractRegs (AsmBinOp _ reg imm1 imm2) = reg : (immToReg imm1 ++ immToReg imm2)
+extractRegs (AsmUnaryOp _ reg imm) = reg : immToReg imm
+extractRegs (AsmRet imm) = immToReg imm
+
+immToReg :: Imm -> [Reg]
+immToReg (ImmLit _) = []
+immToReg (ImmReg reg) = [reg]
