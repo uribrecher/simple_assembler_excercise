@@ -120,16 +120,21 @@ ppReg (Reg i) = "%r" <> show i
 
 -- 1. Implement: toAsm :: Expr -> Asm
 
-
+-- | transform a given expression into a list of assembly instructions
 toAsm :: Expr -> Asm
 toAsm expr = loadVars ++ useVars ++ [AsmRet imm]
   where ((useVars, imm), AsmState e _) = runState (toAsmS expr) (AsmState M.empty (Reg 0))
         loadFold name reg asm = AsmLoad reg name : asm
         loadVars = M.foldrWithKey loadFold [] e
 
+-- | Env holds the environment of all registers bound to variable addresses
 type Env = M.Map String Reg
+-- | The state of the transformation holds both the environment and the
+-- amount of registers allocated so far
 data AsmState = AsmState Env Reg
 
+-- | Either return the register that is bound to the variable
+-- or will bind a new register to that variable
 lookupVar :: String -> State AsmState Reg
 lookupVar name = do
   (AsmState e _) <- get
@@ -137,21 +142,27 @@ lookupVar name = do
     Just reg -> return reg
     Nothing -> allocateVar name
 
+-- | Bind the next available register to the named variable
 allocateVar :: String -> State AsmState Reg
 allocateVar name = do
   (AsmState e reg) <- get
   put $ AsmState (M.insert name reg e) (nextReg reg)
   return reg
 
+-- | allocate a register
 allocateReg :: State AsmState Reg
 allocateReg = do
   (AsmState e reg) <- get
   put $ AsmState e (nextReg reg)
   return reg
 
+-- | This is needed because Reg is not deriving from Enum
 nextReg :: Reg -> Reg
 nextReg (Reg x) = Reg (succ x)
 
+-- | create a state monad that will transform the expression into
+-- a tuple of: assembly (without loading) and the final immediate to return
+-- the resulting AsmState hold the environment with all bound registers
 toAsmS :: Expr -> State AsmState (Asm, Imm)
 toAsmS = \case
   ELit x -> return ([], ImmLit x)
@@ -183,7 +194,7 @@ livenessAnalysis :: Asm -> M.Map Reg Line
 livenessAnalysis = Ind.ifoldr livenessFold M.empty
 
 livenessFold :: Int -> Instruction -> M.Map Reg Line -> M.Map Reg Line
-livenessFold i inst = flip M.union (M.fromList $ zip (extractRegs inst) (repeat i))
+livenessFold line inst = flip M.union (M.fromList $ zip (extractRegs inst) (repeat line))
 
 extractRegs :: Instruction -> [Reg]
 extractRegs = \case
