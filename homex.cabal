@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 539512beed8f5aeb164596ca2236ef81af38a313ddc99b60fb5d99b21bbde04e
+-- hash: 99161a5c1b8ed122423405c431b075ad9a6b07540fcef7a4b575bb09bfdacd8d
 
 name:           homex
 version:        0.1.0.0
@@ -36,6 +36,7 @@ library
       base >=4.7 && <5
     , containers
     , lens
+    , mtl
   default-language: Haskell2010
 
 executable homex-exe
@@ -51,6 +52,7 @@ executable homex-exe
     , containers
     , homex
     , lens
+    , mtl
   default-language: Haskell2010
 
 test-suite homex-test
@@ -66,4 +68,5 @@ test-suite homex-test
     , containers
     , homex
     , lens
+    , mtl
   default-language: Haskell2010

@@ -12,11 +12,13 @@ module Asm_Draft
 import Data.Char (toUpper)
 import qualified Data.Map as M
 import Control.Lens.Indexed as Ind
+import Control.Monad.State
 
 -----------------
 -- Definitions --
 -----------------
 
+-- (a + b) * (a + c)
 exp1 :: Expr
 exp1 = EBinOp Mul
         (EBinOp Add
@@ -28,6 +30,7 @@ exp1 = EBinOp Mul
           (ELit 2)
         )
 
+-- -2 / (a - b + c + 2*b - c)
 exp2 :: Expr
 exp2 = EBinOp Div
         (EUnaryOp Neg (ELit 2))
@@ -120,39 +123,51 @@ ppReg (Reg i) = "%r" <> show i
 
 toAsm :: Expr -> Asm
 toAsm expr = loadVars ++ useVars ++ [AsmRet imm]
-  where (useVars, imm, AsmState e _) = toAsm' expr (AsmState M.empty 0)
-        loadFold k a asm = AsmLoad (Reg a) k : asm
+  where ((useVars, imm), AsmState e _) = runState (toAsmS expr) (AsmState M.empty (Reg 0))
+        loadFold name reg asm = AsmLoad reg name : asm
         loadVars = M.foldrWithKey loadFold [] e
 
-type Env = M.Map String Int
-data AsmState = AsmState Env Int
+type Env = M.Map String Reg
+data AsmState = AsmState Env Reg
 
-lookupOrUpdate :: String -> AsmState -> (Int, AsmState)
-lookupOrUpdate key s@(AsmState e reg) = case val of
-    Nothing -> (reg, AsmState (M.insert key reg e) (succ reg))
-    Just x -> (x, s)
-  where val = M.lookup key e
+lookupVar :: String -> State AsmState Reg
+lookupVar name = do
+  (AsmState e _) <- get
+  case M.lookup name e of
+    Just reg -> return reg
+    Nothing -> allocateVar name
 
+allocateVar :: String -> State AsmState Reg
+allocateVar name = do
+  (AsmState e reg) <- get
+  put $ AsmState (M.insert name reg e) (nextReg reg)
+  return reg
 
--- TODO: 1. avoid ++ if possible
---       2. see if monads help here
-toAsm' :: Expr -> AsmState -> (Asm, Imm, AsmState)
-toAsm' (ELit x) s = ([],ImmLit x, s)
-toAsm' (EVar name) s =
-  let (reg, s') = lookupOrUpdate name s
-  in ([], ImmReg (Reg reg), s')
-toAsm' (EUnaryOp op expr) s =
-  let (asm, imm, AsmState e reg) = toAsm' expr s
-      asm' = asm ++ [AsmUnaryOp op (Reg reg) imm]
-  in
-    (asm', ImmReg (Reg reg), AsmState e (succ reg))
-toAsm' (EBinOp op ex1 ex2) s =
-  let (asm1, imm1, s1) = toAsm' ex1 s
-      (asm2, imm2, s2) = toAsm' ex2 s1
-      AsmState e reg = s2
-      asm = asm1 ++ asm2 ++ [AsmBinOp op (Reg reg) imm1 imm2]
-  in
-    (asm, ImmReg (Reg reg), AsmState e (succ reg))
+allocateReg :: State AsmState Reg
+allocateReg = do
+  (AsmState e reg) <- get
+  put $ AsmState e (nextReg reg)
+  return reg
+
+nextReg :: Reg -> Reg
+nextReg (Reg x) = Reg (succ x)
+
+toAsmS :: Expr -> State AsmState (Asm, Imm)
+toAsmS = \case
+  ELit x -> return ([], ImmLit x)
+  EVar name -> do
+    reg <- lookupVar name
+    return ([], ImmReg reg)
+  EUnaryOp op expr -> do
+    (asm, imm) <- toAsmS expr
+    reg <- allocateReg
+    return (asm ++ [AsmUnaryOp op reg imm], ImmReg reg)
+  EBinOp op ex1 ex2 -> do
+    (asm1, imm1) <- toAsmS ex1
+    (asm2, imm2) <- toAsmS ex2
+    reg <- allocateReg
+    return (asm1 ++ asm2 ++ [AsmBinOp op reg imm1 imm2], ImmReg reg)
+
 
 
 -----------------------
@@ -171,11 +186,13 @@ livenessFold :: Int -> Instruction -> M.Map Reg Line -> M.Map Reg Line
 livenessFold i inst = flip M.union (M.fromList $ zip (extractRegs inst) (repeat i))
 
 extractRegs :: Instruction -> [Reg]
-extractRegs (AsmLoad reg _) = [reg]
-extractRegs (AsmBinOp _ reg imm1 imm2) = reg : (immToReg imm1 ++ immToReg imm2)
-extractRegs (AsmUnaryOp _ reg imm) = reg : immToReg imm
-extractRegs (AsmRet imm) = immToReg imm
+extractRegs = \case
+  AsmLoad reg _ -> [reg]
+  AsmBinOp _ reg imm1 imm2 -> reg : (immToReg imm1 ++ immToReg imm2)
+  AsmUnaryOp _ reg imm -> reg : immToReg imm
+  AsmRet imm -> immToReg imm
 
 immToReg :: Imm -> [Reg]
-immToReg (ImmLit _) = []
-immToReg (ImmReg reg) = [reg]
+immToReg = \case
+  ImmLit _ -> []
+  ImmReg reg -> [reg]
