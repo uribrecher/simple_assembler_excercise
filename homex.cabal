@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 99161a5c1b8ed122423405c431b075ad9a6b07540fcef7a4b575bb09bfdacd8d
+-- hash: 13b5f18d71aff0241b01ae359344ff7a7d762796445f98921074520e90d9e5d2
 
 name:           homex
 version:        0.1.0.0
@@ -42,7 +42,7 @@ library
 executable homex-exe
   main-is: Main.hs
   other-modules:
-      Asm_Draft
+      Asm
       Paths_homex
   hs-source-dirs:
       app

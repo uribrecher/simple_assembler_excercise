@@ -1,12 +1,18 @@
 {-# LANGUAGE LambdaCase #-}
 {-# OPTIONS -Wall #-}
 
-module Asm_Draft
+module Asm
 ( toAsm
 , livenessAnalysis
 , ppAsm
-, exp1
-, exp2
+, Expr
+, add
+, sub
+, mul
+, ddiv
+, neg
+, var
+, lit
 ) where
 
 import Data.Char (toUpper)
@@ -18,35 +24,27 @@ import Control.Monad.State
 -- Definitions --
 -----------------
 
--- (a + b) * (a + c)
-exp1 :: Expr
-exp1 = EBinOp Mul
-        (EBinOp Add
-          (EVar "a")
-          (EVar "b")
-        )
-        (EBinOp Add
-          (EVar "a")
-          (ELit 2)
-        )
+var :: String -> Expr
+var = EVar
 
--- -2 / (a - b + c + 2*b - c)
-exp2 :: Expr
-exp2 = EBinOp Div
-        (EUnaryOp Neg (ELit 2))
-        (EBinOp Add
-          (EBinOp Add
-            (EBinOp Sub
-              (EVar "a")
-              (EVar "b")
-            )
-            (EVar "c")
-          )
-          (EBinOp Sub
-            (EBinOp Mul (ELit 2) (EVar "b"))
-            (EVar "c")
-          )
-        )
+lit :: Int -> Expr
+lit = ELit
+
+neg :: Expr -> Expr
+neg = EUnaryOp Neg
+
+add :: Expr -> Expr -> Expr
+add = EBinOp Add
+
+sub :: Expr -> Expr -> Expr
+sub = EBinOp Sub
+
+mul :: Expr -> Expr -> Expr
+mul = EBinOp Mul
+
+ddiv :: Expr -> Expr -> Expr
+ddiv = EBinOp Div
+
 
 -- Expression --
 
