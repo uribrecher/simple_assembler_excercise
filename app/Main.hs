@@ -13,10 +13,10 @@ main = do
   handleExpr exp1
   handleExpr exp2
 
+-- | handleExpr is a great function
 handleExpr :: Expr -> IO ()
 handleExpr expr = do
   putStrLn "================="
   let asm = toAsm expr
   ppAsm asm
   print $ livenessAnalysis asm
-  
